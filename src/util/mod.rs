@@ -26,3 +26,6 @@ pub use self::rng::reset_rng_state;
 
 #[cfg(test)]
 pub(crate) mod test_utils;
+
+pub use self::configurations::{UserConfigurations, ChannelLimits};
+pub mod configurations;
