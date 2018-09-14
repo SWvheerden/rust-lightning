@@ -255,7 +255,6 @@ pub struct ChannelManager {
 	chain_monitor: Arc<ChainWatchInterface>,
 	tx_broadcaster: Arc<BroadcasterInterface>,
 
-	announce_channels_publicly: bool,
 	latest_block_height: AtomicUsize,
 	secp_ctx: Secp256k1<secp256k1::All>,
 
@@ -308,7 +307,7 @@ impl ChannelManager {
 	/// the main "logic hub" for all channel-related actions, and implements ChannelMessageHandler.
 	/// Non-proportional fees are fixed according to our risk using the provided fee estimator.
 	/// panics if channel_value_satoshis is >= `MAX_FUNDING_SATOSHIS`!
-	pub fn new(our_network_key: SecretKey, fee_proportional_millionths: u32, announce_channels_publicly: bool, network: Network, feeest: Arc<FeeEstimator>, monitor: Arc<ManyChannelMonitor>, chain_monitor: Arc<ChainWatchInterface>, tx_broadcaster: Arc<BroadcasterInterface>, logger: Arc<Logger>, config : UserConfigurations) -> Result<Arc<ChannelManager>, secp256k1::Error> {
+	pub fn new(our_network_key: SecretKey, network: Network, feeest: Arc<FeeEstimator>, monitor: Arc<ManyChannelMonitor>, chain_monitor: Arc<ChainWatchInterface>, tx_broadcaster: Arc<BroadcasterInterface>, logger: Arc<Logger>, config : UserConfigurations) -> Result<Arc<ChannelManager>, secp256k1::Error> {
 		let secp_ctx = Secp256k1::new();
 		let res = Arc::new(ChannelManager {
 			configuration : config,
@@ -317,8 +316,7 @@ impl ChannelManager {
 			monitor: monitor.clone(),
 			chain_monitor,
 			tx_broadcaster,
-
-			announce_channels_publicly,			
+		
 			latest_block_height: AtomicUsize::new(0), //TODO: Get an init value (generally need to replay recent chain on chain_monitor registration)
 			secp_ctx,
 
@@ -369,7 +367,7 @@ impl ChannelManager {
 			}
 		};
 
-		let channel = Channel::new_outbound(&*self.fee_estimator, chan_keys, their_network_key, channel_value_satoshis, push_msat, self.announce_channels_publicly, user_id, Arc::clone(&self.logger), &self.configuration)?;
+		let channel = Channel::new_outbound(&*self.fee_estimator, chan_keys, their_network_key, channel_value_satoshis, push_msat, user_id, Arc::clone(&self.logger), &self.configuration)?;
 		let res = channel.get_open_channel(self.genesis_hash.clone(), &*self.fee_estimator);
 		let mut channel_state = self.channel_state.lock().unwrap();
 		match channel_state.by_id.insert(channel.channel_id(), channel) {
@@ -1456,7 +1454,7 @@ impl ChannelManager {
 			}
 		};
 
-		let channel = Channel::new_from_req(&*self.fee_estimator, chan_keys, their_node_id.clone(), msg, 0, false, self.announce_channels_publicly, Arc::clone(&self.logger), &self.configuration).map_err(|e| MsgHandleErrInternal::from_no_close(e))?;
+		let channel = Channel::new_from_req(&*self.fee_estimator, chan_keys, their_node_id.clone(), msg, 0, Arc::clone(&self.logger), &self.configuration).map_err(|e| MsgHandleErrInternal::from_no_close(e))?;
 		let accept_msg = channel.get_accept_channel();
 		channel_state.by_id.insert(channel.channel_id(), channel);
 		Ok(accept_msg)
@@ -2994,7 +2992,7 @@ mod tests {
 
 	fn create_network(node_count: usize) -> Vec<Node> {
 		use util::UserConfigurations;
-		
+
 		let mut nodes = Vec::new();
 		let mut rng = thread_rng();
 		let secp_ctx = Secp256k1::new();
@@ -3013,8 +3011,10 @@ mod tests {
 				rng.fill_bytes(&mut key_slice);
 				SecretKey::from_slice(&secp_ctx, &key_slice).unwrap()
 			};
-			let config = UserConfigurations::new();
-			let node = ChannelManager::new(node_id.clone(), 0, true, Network::Testnet, feeest.clone(), chan_monitor.clone(), chain_monitor.clone(), tx_broadcaster.clone(), Arc::clone(&logger), config).unwrap();
+			let mut config = UserConfigurations::new();
+			config.channel_options.annouce_channel = true;
+			config.channel_options.fee_proportional_millionths = 0;
+			let node = ChannelManager::new(node_id.clone(), Network::Testnet, feeest.clone(), chan_monitor.clone(), chain_monitor.clone(), tx_broadcaster.clone(), Arc::clone(&logger), config).unwrap();
 			let router = Router::new(PublicKey::from_secret_key(&secp_ctx, &node_id), chain_monitor.clone(), Arc::clone(&logger));
 			nodes.push(Node { chain_monitor, tx_broadcaster, chan_monitor, node, router,
 				network_payment_count: payment_count.clone(),
