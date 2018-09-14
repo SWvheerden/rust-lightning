@@ -222,8 +222,9 @@ pub fn do_test(data: &[u8]) {
 			decode_msg!(msgs::OpenChannel, 2*32+6*8+4+2*2+6*33+1)
 		};
 		let mut chan_config = UserConfigurations::new();
-		chan_config.channel_options.annouce_channel = false;
-		let mut chan = match Channel::new_from_req(&fee_est, chan_keys!(), their_pubkey, &open_chan, slice_to_be64(get_slice!(8)), get_slice!(1)[0] == 0, Arc::clone(&logger),&chan_config) {
+		chan_config.channel_options.allow_annouce_channel = false;
+		chan_config.channel_options.annouce_channel = get_slice!(1)[0] == 0;
+		let mut chan = match Channel::new_from_req(&fee_est, chan_keys!(), their_pubkey, &open_chan, slice_to_be64(get_slice!(8)), Arc::clone(&logger),&chan_config) {
 			Ok(chan) => chan,
 			Err(_) => return,
 		};

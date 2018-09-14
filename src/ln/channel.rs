@@ -2541,7 +2541,7 @@ impl Channel {
 	/// Note that the "channel must be funded" requirement is stricter than BOLT 7 requires - see
 	/// https://github.com/lightningnetwork/lightning-rfc/issues/468
 	pub fn get_channel_announcement(&self, our_node_id: PublicKey, chain_hash: Sha256dHash) -> Result<(msgs::UnsignedChannelAnnouncement, Signature), HandleError> {
-		if !self.self.config.channel_options.allow_annouce_channel {
+		if !self.config.channel_options.allow_annouce_channel {
 			return Err(HandleError{err: "Channel is not available for public announcements", action: Some(msgs::ErrorAction::IgnoreError)});
 		}
 		if self.channel_state & (ChannelState::ChannelFunded as u32) == 0 {
