@@ -256,7 +256,6 @@ pub struct ChannelManager {
 	tx_broadcaster: Arc<BroadcasterInterface>,
 
 	announce_channels_publicly: bool,
-	fee_proportional_millionths: u32,
 	latest_block_height: AtomicUsize,
 	secp_ctx: Secp256k1<secp256k1::All>,
 
@@ -307,22 +306,19 @@ pub struct ChannelDetails {
 impl ChannelManager {
 	/// Constructs a new ChannelManager to hold several channels and route between them. This is
 	/// the main "logic hub" for all channel-related actions, and implements ChannelMessageHandler.
-	/// fee_proportional_millionths is an optional fee to charge any payments routed through us.
 	/// Non-proportional fees are fixed according to our risk using the provided fee estimator.
 	/// panics if channel_value_satoshis is >= `MAX_FUNDING_SATOSHIS`!
-	pub fn new(our_network_key: SecretKey, fee_proportional_millionths: u32, announce_channels_publicly: bool, network: Network, feeest: Arc<FeeEstimator>, monitor: Arc<ManyChannelMonitor>, chain_monitor: Arc<ChainWatchInterface>, tx_broadcaster: Arc<BroadcasterInterface>, logger: Arc<Logger>) -> Result<Arc<ChannelManager>, secp256k1::Error> {
+	pub fn new(our_network_key: SecretKey, fee_proportional_millionths: u32, announce_channels_publicly: bool, network: Network, feeest: Arc<FeeEstimator>, monitor: Arc<ManyChannelMonitor>, chain_monitor: Arc<ChainWatchInterface>, tx_broadcaster: Arc<BroadcasterInterface>, logger: Arc<Logger>, config : UserConfigurations) -> Result<Arc<ChannelManager>, secp256k1::Error> {
 		let secp_ctx = Secp256k1::new();
-
 		let res = Arc::new(ChannelManager {
-			configuration : UserConfigurations::new(),
+			configuration : config,
 			genesis_hash: genesis_block(network).header.bitcoin_hash(),
 			fee_estimator: feeest.clone(),
 			monitor: monitor.clone(),
 			chain_monitor,
 			tx_broadcaster,
 
-			announce_channels_publicly,
-			fee_proportional_millionths,
+			announce_channels_publicly,			
 			latest_block_height: AtomicUsize::new(0), //TODO: Get an init value (generally need to replay recent chain on chain_monitor registration)
 			secp_ctx,
 
@@ -917,7 +913,7 @@ impl ChannelManager {
 					if !chan.is_live() {
 						Some(("Forwarding channel is not in a ready state.", 0x1000 | 7, self.get_channel_update(chan).unwrap()))
 					} else {
-						let fee = amt_to_forward.checked_mul(self.fee_proportional_millionths as u64).and_then(|prop_fee| { (prop_fee / 1000000).checked_add(chan.get_our_fee_base_msat(&*self.fee_estimator) as u64) });
+						let fee = amt_to_forward.checked_mul(self.configuration.channel_options.fee_proportional_millionths as u64).and_then(|prop_fee| { (prop_fee / 1000000).checked_add(chan.get_our_fee_base_msat(&*self.fee_estimator) as u64) });
 						if fee.is_none() || msg.amount_msat < fee.unwrap() || (msg.amount_msat - fee.unwrap()) < *amt_to_forward {
 							Some(("Prior hop has deviated from specified fees parameters or origin node has obsolete ones", 0x1000 | 12, self.get_channel_update(chan).unwrap()))
 						} else {
@@ -954,7 +950,7 @@ impl ChannelManager {
 			cltv_expiry_delta: CLTV_EXPIRY_DELTA,
 			htlc_minimum_msat: chan.get_our_htlc_minimum_msat(),
 			fee_base_msat: chan.get_our_fee_base_msat(&*self.fee_estimator),
-			fee_proportional_millionths: self.fee_proportional_millionths,
+			fee_proportional_millionths: self.configuration.channel_options.fee_proportional_millionths,
 			excess_data: Vec::new(),
 		};
 
@@ -1486,7 +1482,8 @@ impl ChannelManager {
 		pending_events.push(events::Event::FundingGenerationReady {
 			temporary_channel_id: msg.temporary_channel_id,
 			channel_value_satoshis: value,
-			output_script: output_script,			user_channel_id: user_id,
+			output_script: output_script,
+			user_channel_id: user_id,
 		});
 		Ok(())
 	}
@@ -2996,6 +2993,8 @@ mod tests {
 	}
 
 	fn create_network(node_count: usize) -> Vec<Node> {
+		use util::UserConfigurations;
+		
 		let mut nodes = Vec::new();
 		let mut rng = thread_rng();
 		let secp_ctx = Secp256k1::new();
@@ -3014,7 +3013,8 @@ mod tests {
 				rng.fill_bytes(&mut key_slice);
 				SecretKey::from_slice(&secp_ctx, &key_slice).unwrap()
 			};
-			let node = ChannelManager::new(node_id.clone(), 0, true, Network::Testnet, feeest.clone(), chan_monitor.clone(), chain_monitor.clone(), tx_broadcaster.clone(), Arc::clone(&logger)).unwrap();
+			let config = UserConfigurations::new();
+			let node = ChannelManager::new(node_id.clone(), 0, true, Network::Testnet, feeest.clone(), chan_monitor.clone(), chain_monitor.clone(), tx_broadcaster.clone(), Arc::clone(&logger), config).unwrap();
 			let router = Router::new(PublicKey::from_secret_key(&secp_ctx, &node_id), chain_monitor.clone(), Arc::clone(&logger));
 			nodes.push(Node { chain_monitor, tx_broadcaster, chan_monitor, node, router,
 				network_payment_count: payment_count.clone(),

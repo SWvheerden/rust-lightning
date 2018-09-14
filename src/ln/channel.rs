@@ -266,8 +266,10 @@ const INITIAL_COMMITMENT_NUMBER: u64 = (1 << 48) - 1;
 // calling channel_id() before we're set up or things like get_outbound_funding_signed on an
 // inbound channel.
 pub struct Channel {
-
-	config : UserConfigurations,
+	///TODO: split limits and runtime setting here
+	/// channel limits cant change during channel existence
+	/// but other settings can, but they need an update broadcast before they can change. 
+	config : UserConfigurations, 
 	user_id: u64,
 
 	channel_id: [u8; 32],
@@ -613,7 +615,7 @@ impl Channel {
 
 		let mut chan = Channel {
 			user_id: user_id,
-			config: (*configurations).clone(),
+			config: (*configurations).clone(), 
 			channel_id: msg.temporary_channel_id,
 			channel_state: (ChannelState::OurInitSent as u32) | (ChannelState::TheirInitSent as u32),
 			channel_outbound: false,
