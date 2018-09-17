@@ -1,6 +1,6 @@
 /// This is the main user configuration
 /// This struct should contain all user customizable options as this is passed to the channel to be accessed
-#[derive(Copy, Clone, Debug)] 
+#[derive(Copy, Clone, Debug)]
 pub struct UserConfigurations{
 	/// optional user spesefied channel limits
 	/// These should stay the same for a channel and cannot change during the life of a channel
@@ -54,15 +54,15 @@ impl ChannelLimits {
 #[derive(Copy, Clone, Debug)]
 pub struct ChannelOptions{
 	/// Amount (in millionths of a satoshi) channel will charge per transferred satoshi.
-	pub fee_proportional_millionths : u32, 	
+	pub fee_proportional_millionths : u32,
 	///should we require the channel be annouced or not
 	pub annouce_channel : bool,
 	///do we allow incomming channel to be announced
 	pub allow_annouce_channel : bool,
 }
 impl ChannelOptions {
-	/// creating a struct with values. 
-	/// fee_proportional_millionths should be changed afterwords 
+	/// creating a struct with values.
+	/// fee_proportional_millionths should be changed afterwords
 	pub fn new() -> Self{
 		ChannelOptions {
 			fee_proportional_millionths : 0,

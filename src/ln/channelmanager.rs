@@ -316,7 +316,7 @@ impl ChannelManager {
 			monitor: monitor.clone(),
 			chain_monitor,
 			tx_broadcaster,
-		
+
 			latest_block_height: AtomicUsize::new(0), //TODO: Get an init value (generally need to replay recent chain on chain_monitor registration)
 			secp_ctx,
 
