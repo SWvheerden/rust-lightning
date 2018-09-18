@@ -34,6 +34,8 @@ pub struct ChannelLimits{
 	pub max_accepted_htlcs : u16,
 	/// min allowed dust_limit_satashis
 	pub dust_limit_satoshis : u64,
+	///minimum depth to a number of blocks that is considered reasonable to avoid double-spending of the funding transaction
+	pub  minimum_depth : u32,
 }
 
 impl ChannelLimits {
@@ -46,6 +48,7 @@ impl ChannelLimits {
 			channel_reserve_satoshis : <u64>::max_value(),
 			max_accepted_htlcs : 0,
 			dust_limit_satoshis : 0,
+			minimum_depth : <u32>::max_value(),
 		}
 	}
 }

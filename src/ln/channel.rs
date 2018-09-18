@@ -1264,7 +1264,10 @@ impl Channel {
 		if msg.max_accepted_htlcs > 483 {
 			return_error_message!("max_accpted_htlcs > 483");
 		}
-
+		//Optional user definined limits
+		if msg.minimum_depth > self.config.channel_limits.minimum_depth {
+			return_error_message!("We consider the minimum depth to be unreasonably large");
+		}
 		self.channel_monitor.set_their_base_keys(&msg.htlc_basepoint, &msg.delayed_payment_basepoint);
 
 		self.their_dust_limit_satoshis = msg.dust_limit_satoshis;
