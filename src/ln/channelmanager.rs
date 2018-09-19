@@ -3014,7 +3014,7 @@ mod tests {
 			let mut config = UserConfigurations::new();
 			config.channel_options.announced_channel = true;
 			config.channel_options.fee_proportional_millionths = 0;
-			config.channel_options.force_announced_channel_preference = true;
+			config.channel_options.force_announced_channel_preference = false;
 			let node = ChannelManager::new(node_id.clone(), Network::Testnet, feeest.clone(), chan_monitor.clone(), chain_monitor.clone(), tx_broadcaster.clone(), Arc::clone(&logger), config).unwrap();
 			let router = Router::new(PublicKey::from_secret_key(&secp_ctx, &node_id), chain_monitor.clone(), Arc::clone(&logger));
 			nodes.push(Node { chain_monitor, tx_broadcaster, chan_monitor, node, router,
