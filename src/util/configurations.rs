@@ -58,10 +58,10 @@ impl ChannelLimits {
 pub struct ChannelOptions{
 	/// Amount (in millionths of a satoshi) channel will charge per transferred satoshi.
 	pub fee_proportional_millionths : u32,
-	///should we require the channel be annouced or not
-	pub annouce_channel : bool,
-	///do we allow incomming channel to be announced
-	pub allow_annouce_channel : bool,
+	///Is this channel an annouced channe;
+	pub announced_channel : bool,
+	///do we force the incomming channel to match our announced channel preference
+	pub force_announced_channel_preference : bool,
 }
 impl ChannelOptions {
 	/// creating a struct with values.
@@ -69,8 +69,8 @@ impl ChannelOptions {
 	pub fn new() -> Self{
 		ChannelOptions {
 			fee_proportional_millionths : 0,
-			annouce_channel : true,
-			allow_annouce_channel : true,
+			announced_channel : true,
+			force_announced_channel_preference : false,
 		}
 	}
 }

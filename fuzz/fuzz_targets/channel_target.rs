@@ -195,7 +195,7 @@ pub fn do_test(data: &[u8]) {
 		let chan_value = slice_to_be24(get_slice!(3));
 		let push_msat = slice_to_be24(get_slice!(3));
 		let mut config = UserConfigurations::new();
-		config.channel_options.annouce_channel = (get_slice!(1)[0] == 0);
+		config.channel_options.announced_channel = (get_slice!(1)[0] == 0);
 		let mut chan = match Channel::new_outbound(&fee_est, chan_keys!(), their_pubkey, chan_value, push_msat, slice_to_be64(get_slice!(8)), Arc::clone(&logger), &config) {
 			Ok(chan) => chan,
 			Err(_) => return,
@@ -222,8 +222,8 @@ pub fn do_test(data: &[u8]) {
 			decode_msg!(msgs::OpenChannel, 2*32+6*8+4+2*2+6*33+1)
 		};
 		let mut chan_config = UserConfigurations::new();
-		chan_config.channel_options.allow_annouce_channel = false;
-		chan_config.channel_options.annouce_channel = get_slice!(1)[0] == 0;
+		chan_config.channel_options.force_announced_channel_preference = false;
+		chan_config.channel_options.announced_channel = get_slice!(1)[0] == 0;
 		let mut chan = match Channel::new_from_req(&fee_est, chan_keys!(), their_pubkey, &open_chan, slice_to_be64(get_slice!(8)), Arc::clone(&logger),&chan_config) {
 			Ok(chan) => chan,
 			Err(_) => return,

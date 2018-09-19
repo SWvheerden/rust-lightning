@@ -507,6 +507,7 @@ impl Channel {
 				return Err(HandleError{err: $msg, action: Some(msgs::ErrorAction::SendErrorMessage{ msg: msgs::ErrorMessage { channel_id: msg.temporary_channel_id, data: $msg.to_string() }})});
 			}
 		}
+		let mut local_config = (*configurations).clone();
 
 		// Check sanity of message fields:
 		if msg.funding_satoshis >= MAX_FUNDING_SATOSHIS {
@@ -564,12 +565,16 @@ impl Channel {
 		// Convert things into internal flags and prep our state:
 
 		let their_announce = if (msg.channel_flags & 1) == 1 { true } else { false };
-		if configurations.channel_options.annouce_channel && !their_announce {
-			return_error_message!("Peer tried to open unannounced channel, but we require public ones");
+		if local_config.channel_options.force_announced_channel_preference{
+			if local_config.channel_options.announced_channel && !their_announce {
+				return_error_message!("Peer tried to open unannounced channel, but we require public ones");
+			}
+			if !local_config.channel_options.announced_channel && their_announce {
+				return_error_message!("Peer tried to open announced channel, but we require private ones");
+			}
 		}
-		if !configurations.channel_options.allow_annouce_channel && their_announce {
-			return_error_message!("Peer tried to open announced channel, but we require private ones");
-		}
+		//we either accept their preference or the preferences match
+		local_config.channel_options.announced_channel = their_announce;
 
 		let background_feerate = fee_estimator.get_est_sat_per_1000_weight(ConfirmationTarget::Background);
 
@@ -610,7 +615,7 @@ impl Channel {
 
 		let mut chan = Channel {
 			user_id: user_id,
-			config: (*configurations).clone(),
+			config: local_config,
 			channel_id: msg.temporary_channel_id,
 			channel_state: (ChannelState::OurInitSent as u32) | (ChannelState::TheirInitSent as u32),
 			channel_outbound: false,
@@ -2251,7 +2256,7 @@ impl Channel {
 	}
 
 	pub fn should_announce(&self) -> bool {
-		self.config.channel_options.annouce_channel
+		self.config.channel_options.announced_channel
 	}
 
 	/// Gets the fee we'd want to charge for adding an HTLC output to this Channel
@@ -2437,7 +2442,7 @@ impl Channel {
 			delayed_payment_basepoint: PublicKey::from_secret_key(&self.secp_ctx, &self.local_keys.delayed_payment_base_key),
 			htlc_basepoint: PublicKey::from_secret_key(&self.secp_ctx, &self.local_keys.htlc_base_key),
 			first_per_commitment_point: PublicKey::from_secret_key(&self.secp_ctx, &local_commitment_secret),
-			channel_flags: if self.config.channel_options.allow_annouce_channel {1} else {0},
+			channel_flags: if self.config.channel_options.announced_channel {1} else {0},
 			shutdown_scriptpubkey: None,
 		}
 	}
@@ -2541,7 +2546,7 @@ impl Channel {
 	/// Note that the "channel must be funded" requirement is stricter than BOLT 7 requires - see
 	/// https://github.com/lightningnetwork/lightning-rfc/issues/468
 	pub fn get_channel_announcement(&self, our_node_id: PublicKey, chain_hash: Sha256dHash) -> Result<(msgs::UnsignedChannelAnnouncement, Signature), HandleError> {
-		if !self.config.channel_options.allow_annouce_channel {
+		if !self.config.channel_options.force_announced_channel_preference {
 			return Err(HandleError{err: "Channel is not available for public announcements", action: Some(msgs::ErrorAction::IgnoreError)});
 		}
 		if self.channel_state & (ChannelState::ChannelFunded as u32) == 0 {
@@ -2904,7 +2909,7 @@ mod tests {
 
 		let their_node_id = PublicKey::from_secret_key(&secp_ctx, &SecretKey::from_slice(&secp_ctx, &[42; 32]).unwrap());
 		let mut config = UserConfigurations::new();
-		config.channel_options.annouce_channel= false;
+		config.channel_options.announced_channel= false;
 		let mut chan = Channel::new_outbound(&feeest, chan_keys, their_node_id, 10000000, 100000, 42, Arc::clone(&logger), &config).unwrap(); // Nothing uses their network key in this test
 		chan.their_to_self_delay = 144;
 		chan.our_dust_limit_satoshis = 546;
