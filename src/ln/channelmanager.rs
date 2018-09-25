@@ -347,7 +347,7 @@ impl<'b> ChannelManager <'b> {
 	/// If successful, will generate a SendOpenChannel event, so you should probably poll
 	/// PeerManager::process_events afterwards.
 	/// Raises APIError::APIMisuseError when channel_value_satoshis > 2**24 or push_msat being greater than channel_value_satoshis * 1k
-	pub fn create_channel(&self, their_network_key: PublicKey, channel_value_satoshis: u64, push_msat: u64, user_id: u64) -> Result<(), APIError> {
+	pub fn create_channel(&'b self, their_network_key: PublicKey, channel_value_satoshis: u64, push_msat: u64, user_id: u64) -> Result<(), APIError> {
 		let chan_keys = if cfg!(feature = "fuzztarget") {
 			ChannelKeys {
 				funding_key:               SecretKey::from_slice(&self.secp_ctx, &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap(),
@@ -1426,7 +1426,7 @@ impl<'b> ChannelManager <'b> {
 		unimplemented!();
 	}
 
-	fn internal_open_channel(&self, their_node_id: &PublicKey, msg: &msgs::OpenChannel) -> Result<msgs::AcceptChannel, MsgHandleErrInternal> {
+	fn internal_open_channel(&'b self, their_node_id: &PublicKey, msg: &msgs::OpenChannel) -> Result<msgs::AcceptChannel, MsgHandleErrInternal> {
 		if msg.chain_hash != self.genesis_hash {
 			return Err(MsgHandleErrInternal::send_err_msg_no_close("Unknown genesis block hash", msg.temporary_channel_id.clone()));
 		}
@@ -2083,7 +2083,7 @@ macro_rules! handle_error {
 
 impl<'b> ChannelMessageHandler for ChannelManager<'b> {
 	//TODO: Handle errors and close channel (or so)
-	fn handle_open_channel(&self, their_node_id: &PublicKey, msg: &msgs::OpenChannel) -> Result<msgs::AcceptChannel, HandleError> {
+	fn handle_open_channel(&'b self, their_node_id: &PublicKey, msg: &msgs::OpenChannel) -> Result<msgs::AcceptChannel, HandleError> {
 		handle_error!(self, self.internal_open_channel(their_node_id, msg), their_node_id)
 	}
 
