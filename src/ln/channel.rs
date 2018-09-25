@@ -26,7 +26,7 @@ use util::ser::Writeable;
 use util::sha2::Sha256;
 use util::logger::Logger;
 use util::errors::APIError;
-use util::configurations::UserConfigurations;
+use util::configurations::{UserConfigurations,ChannelLimits,ChannelOptions};
 
 use std;
 use std::default::Default;
@@ -265,8 +265,10 @@ const INITIAL_COMMITMENT_NUMBER: u64 = (1 << 48) - 1;
 // has been completed, and then turn into a Channel to get compiler-time enforcement of things like
 // calling channel_id() before we're set up or things like get_outbound_funding_signed on an
 // inbound channel.
-pub struct Channel {
-	config : UserConfigurations,
+pub struct Channel<'b>{
+	config : &'b ChannelOptions,
+	channel_init_limits : ChannelLimits,
+
 	user_id: u64,
 
 	channel_id: [u8; 32],
@@ -372,7 +374,7 @@ macro_rules! secp_derived_key {
 		secp_call!($res, "Derived invalid key, peer is maliciously selecting parameters", $chan_id)
 	}
 }
-impl Channel {
+impl<'b> Channel<'b> {
 	// Convert constants + channel value to limits:
 	fn get_our_max_htlc_value_in_flight_msat(channel_value_satoshis: u64) -> u64 {
 		channel_value_satoshis * 1000 / 10 //TODO
@@ -405,7 +407,7 @@ impl Channel {
 	}
 
 	// Constructors:
-	pub fn new_outbound(fee_estimator: &FeeEstimator, chan_keys: ChannelKeys, their_node_id: PublicKey, channel_value_satoshis: u64, push_msat: u64, user_id: u64, logger: Arc<Logger>, configurations: &UserConfigurations) -> Result<Channel, APIError> {
+	pub fn new_outbound(fee_estimator: &FeeEstimator, chan_keys: ChannelKeys, their_node_id: PublicKey, channel_value_satoshis: u64, push_msat: u64, user_id: u64, logger: Arc<Logger>, configurations: &'b UserConfigurations) -> Result<Channel<'b>, APIError> {
 		if channel_value_satoshis >= MAX_FUNDING_SATOSHIS {
 			return Err(APIError::APIMisuseError{err: "funding value > 2^24"});
 		}
@@ -432,7 +434,8 @@ impl Channel {
 
 		Ok(Channel {
 			user_id: user_id,
-			config : configurations.clone(),
+			config : & configurations.channel_options,
+			channel_init_limits : configurations.channel_limits.clone(),
 			channel_id: rng::rand_u832(),
 			channel_state: ChannelState::OurInitSent as u32,
 			channel_outbound: true,
@@ -501,7 +504,7 @@ impl Channel {
 	/// Assumes chain_hash has already been checked and corresponds with what we expect!
 	/// Generally prefers to take the DisconnectPeer action on failure, as a notice to the sender
 	/// that we're rejecting the new channel.
-	pub fn new_from_req(fee_estimator: &FeeEstimator, chan_keys: ChannelKeys, their_node_id: PublicKey, msg: &msgs::OpenChannel, user_id: u64, logger: Arc<Logger>, configurations : &UserConfigurations) -> Result<Channel, HandleError> {
+	pub fn new_from_req(fee_estimator: &FeeEstimator, chan_keys: ChannelKeys, their_node_id: PublicKey, msg: &msgs::OpenChannel, user_id: u64, logger: Arc<Logger>, configurations : &'b UserConfigurations) -> Result<Channel<'b>, HandleError> {
 		macro_rules! return_error_message {
 			( $msg: expr ) => {
 				return Err(HandleError{err: $msg, action: Some(msgs::ErrorAction::SendErrorMessage{ msg: msgs::ErrorMessage { channel_id: msg.temporary_channel_id, data: $msg.to_string() }})});
@@ -615,7 +618,8 @@ impl Channel {
 
 		let mut chan = Channel {
 			user_id: user_id,
-			config: local_config,
+			config: &local_config.channel_options,
+			channel_init_limits : configurations.channel_limits.clone(),
 			channel_id: msg.temporary_channel_id,
 			channel_state: (ChannelState::OurInitSent as u32) | (ChannelState::TheirInitSent as u32),
 			channel_outbound: false,
@@ -1270,7 +1274,7 @@ impl Channel {
 			return_error_message!("max_accpted_htlcs > 483");
 		}
 		//Optional user definined limits
-		if msg.minimum_depth > self.config.channel_limits.minimum_depth {
+		if msg.minimum_depth > self.channel_init_limits.minimum_depth {
 			return_error_message!("We consider the minimum depth to be unreasonably large");
 		}
 		self.channel_monitor.set_their_base_keys(&msg.htlc_basepoint, &msg.delayed_payment_basepoint);
@@ -1564,7 +1568,7 @@ impl Channel {
 		self.mark_outbound_htlc_removed(msg.htlc_id, None, Some(fail_reason))
 	}
 
-	pub fn update_fail_malformed_htlc<'a>(&mut self, msg: &msgs::UpdateFailMalformedHTLC, fail_reason: HTLCFailReason) -> Result<&HTLCSource, HandleError> {
+	pub fn update_fail_malformed_htlc<'c>(&mut self, msg: &msgs::UpdateFailMalformedHTLC, fail_reason: HTLCFailReason) -> Result<&HTLCSource, HandleError> {
 		if (self.channel_state & (ChannelState::ChannelFunded as u32)) != (ChannelState::ChannelFunded as u32) {
 			return Err(HandleError{err: "Got add HTLC message when channel was not in an operational state", action: None});
 		}
@@ -2256,7 +2260,7 @@ impl Channel {
 	}
 
 	pub fn should_announce(&self) -> bool {
-		self.config.channel_options.announced_channel
+		self.config.announced_channel
 	}
 
 	/// Gets the fee we'd want to charge for adding an HTLC output to this Channel
@@ -2442,7 +2446,7 @@ impl Channel {
 			delayed_payment_basepoint: PublicKey::from_secret_key(&self.secp_ctx, &self.local_keys.delayed_payment_base_key),
 			htlc_basepoint: PublicKey::from_secret_key(&self.secp_ctx, &self.local_keys.htlc_base_key),
 			first_per_commitment_point: PublicKey::from_secret_key(&self.secp_ctx, &local_commitment_secret),
-			channel_flags: if self.config.channel_options.announced_channel {1} else {0},
+			channel_flags: if self.config.announced_channel {1} else {0},
 			shutdown_scriptpubkey: None,
 		}
 	}
@@ -2546,7 +2550,7 @@ impl Channel {
 	/// Note that the "channel must be funded" requirement is stricter than BOLT 7 requires - see
 	/// https://github.com/lightningnetwork/lightning-rfc/issues/468
 	pub fn get_channel_announcement(&self, our_node_id: PublicKey, chain_hash: Sha256dHash) -> Result<(msgs::UnsignedChannelAnnouncement, Signature), HandleError> {
-		if !self.config.channel_options.announced_channel {
+		if !self.config.announced_channel {
 			return Err(HandleError{err: "Channel is not available for public announcements", action: Some(msgs::ErrorAction::IgnoreError)});
 		}
 		if self.channel_state & (ChannelState::ChannelFunded as u32) == 0 {

@@ -207,8 +207,8 @@ struct HTLCForwardInfo {
 	forward_info: PendingForwardHTLCInfo,
 }
 
-struct ChannelHolder {
-	by_id: HashMap<[u8; 32], Channel>,
+struct ChannelHolder<'b> {
+	by_id: HashMap<[u8; 32], Channel<'b>>,
 	short_to_id: HashMap<u64, [u8; 32]>,
 	next_forward: Instant,
 	/// short channel id -> forward infos. Key of 0 means payments received
@@ -221,15 +221,15 @@ struct ChannelHolder {
 	/// go to read them!
 	claimable_htlcs: HashMap<[u8; 32], Vec<HTLCPreviousHopData>>,
 }
-struct MutChannelHolder<'a> {
-	by_id: &'a mut HashMap<[u8; 32], Channel>,
+struct MutChannelHolder<'a, 'b:'a> {
+	by_id: &'a mut HashMap<[u8; 32], Channel<'b>>,
 	short_to_id: &'a mut HashMap<u64, [u8; 32]>,
 	next_forward: &'a mut Instant,
 	forward_htlcs: &'a mut HashMap<u64, Vec<HTLCForwardInfo>>,
 	claimable_htlcs: &'a mut HashMap<[u8; 32], Vec<HTLCPreviousHopData>>,
 }
-impl ChannelHolder {
-	fn borrow_parts(&mut self) -> MutChannelHolder {
+impl <'b> ChannelHolder <'b> {
+	fn borrow_parts<'a>(&'a mut self) -> MutChannelHolder<'a,'b> {
 		MutChannelHolder {
 			by_id: &mut self.by_id,
 			short_to_id: &mut self.short_to_id,
@@ -247,8 +247,8 @@ const ERR: () = "You need at least 32 bit pointers (well, usize, but we'll assum
 /// channel, also tracking HTLC preimages and forwarding onion packets appropriately.
 /// Implements ChannelMessageHandler, handling the multi-channel parts and passing things through
 /// to individual Channels.
-pub struct ChannelManager {
-	configuration : UserConfigurations,
+pub struct ChannelManager <'b>{
+	pub configuration : UserConfigurations,
 	genesis_hash: Sha256dHash,
 	fee_estimator: Arc<FeeEstimator>,
 	monitor: Arc<ManyChannelMonitor>,
@@ -258,7 +258,7 @@ pub struct ChannelManager {
 	latest_block_height: AtomicUsize,
 	secp_ctx: Secp256k1<secp256k1::All>,
 
-	channel_state: Mutex<ChannelHolder>,
+	channel_state: Mutex<ChannelHolder<'b>>,
 	our_network_key: SecretKey,
 
 	pending_events: Mutex<Vec<events::Event>>,
@@ -302,14 +302,15 @@ pub struct ChannelDetails {
 	pub user_id: u64,
 }
 
-impl ChannelManager {
+impl<'b> ChannelManager <'b> {
 	/// Constructs a new ChannelManager to hold several channels and route between them. This is
 	/// the main "logic hub" for all channel-related actions, and implements ChannelMessageHandler.
 	/// Non-proportional fees are fixed according to our risk using the provided fee estimator.
 	/// panics if channel_value_satoshis is >= `MAX_FUNDING_SATOSHIS`!
-	pub fn new(our_network_key: SecretKey, network: Network, feeest: Arc<FeeEstimator>, monitor: Arc<ManyChannelMonitor>, chain_monitor: Arc<ChainWatchInterface>, tx_broadcaster: Arc<BroadcasterInterface>, logger: Arc<Logger>, config : UserConfigurations) -> Result<Arc<ChannelManager>, secp256k1::Error> {
+	pub fn new(our_network_key: SecretKey, network: Network, feeest: Arc<FeeEstimator>, monitor: Arc<ManyChannelMonitor>, chain_monitor: Arc<ChainWatchInterface>, tx_broadcaster: Arc<BroadcasterInterface>, logger: Arc<Logger>) -> Result<Arc<ChannelManager<'b>>, secp256k1::Error> {
 		let secp_ctx = Secp256k1::new();
-		let res = Arc::new(ChannelManager {
+		let config = UserConfigurations::new();
+		let res: Arc<ChannelManager<'b>> = Arc::new(ChannelManager {
 			configuration : config,
 			genesis_hash: genesis_block(network).header.bitcoin_hash(),
 			fee_estimator: feeest.clone(),
@@ -754,7 +755,7 @@ impl ChannelManager {
 		ChannelManager::encrypt_failure_packet(shared_secret, &failure_packet.encode()[..])
 	}
 
-	fn decode_update_add_htlc_onion(&self, msg: &msgs::UpdateAddHTLC) -> (PendingHTLCStatus, MutexGuard<ChannelHolder>) {
+	fn decode_update_add_htlc_onion(&self, msg: &msgs::UpdateAddHTLC) -> (PendingHTLCStatus, MutexGuard<ChannelHolder<'b>>) {
 		macro_rules! get_onion_hash {
 			() => {
 				{
@@ -1924,7 +1925,7 @@ impl ChannelManager {
 	}
 }
 
-impl events::EventsProvider for ChannelManager {
+impl<'b> events::EventsProvider for ChannelManager <'b> {
 	fn get_and_clear_pending_events(&self) -> Vec<events::Event> {
 		let mut pending_events = self.pending_events.lock().unwrap();
 		let mut ret = Vec::new();
@@ -1933,7 +1934,7 @@ impl events::EventsProvider for ChannelManager {
 	}
 }
 
-impl ChainListener for ChannelManager {
+impl<'b> ChainListener for ChannelManager<'b> {
 	fn block_connected(&self, header: &BlockHeader, height: u32, txn_matched: &[&Transaction], indexes_of_txn_matched: &[u32]) {
 		let mut new_events = Vec::new();
 		let mut failed_channels = Vec::new();
@@ -2080,7 +2081,7 @@ macro_rules! handle_error {
 	}
 }
 
-impl ChannelMessageHandler for ChannelManager {
+impl<'b> ChannelMessageHandler for ChannelManager<'b> {
 	//TODO: Handle errors and close channel (or so)
 	fn handle_open_channel(&self, their_node_id: &PublicKey, msg: &msgs::OpenChannel) -> Result<msgs::AcceptChannel, HandleError> {
 		handle_error!(self, self.internal_open_channel(their_node_id, msg), their_node_id)
