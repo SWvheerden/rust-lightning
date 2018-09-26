@@ -415,9 +415,9 @@ pub enum HTLCFailChannelUpdate {
 /// A trait to describe an object which can receive channel messages. Messages MAY be called in
 /// paralell when they originate from different their_node_ids, however they MUST NOT be called in
 /// paralell when the two calls have the same their_node_id.
-pub trait ChannelMessageHandler : events::EventsProvider + Send + Sync {
+pub trait ChannelMessageHandler<'c> : events::EventsProvider + Send + Sync {
 	//Channel init:
-	fn handle_open_channel(&self, their_node_id: &PublicKey, msg: &OpenChannel) -> Result<AcceptChannel, HandleError>;
+	fn handle_open_channel(&'c self, their_node_id: &PublicKey, msg: &OpenChannel) -> Result<AcceptChannel, HandleError>;
 	fn handle_accept_channel(&self, their_node_id: &PublicKey, msg: &AcceptChannel) -> Result<(), HandleError>;
 	fn handle_funding_created(&self, their_node_id: &PublicKey, msg: &FundingCreated) -> Result<FundingSigned, HandleError>;
 	fn handle_funding_signed(&self, their_node_id: &PublicKey, msg: &FundingSigned) -> Result<(), HandleError>;

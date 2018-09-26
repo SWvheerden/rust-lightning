@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{cmp,error,mem,hash,fmt};
 
-pub struct MessageHandler {
-	pub chan_handler: Arc<msgs::ChannelMessageHandler>,
+pub struct MessageHandler<'c> {
+	pub chan_handler: Arc<msgs::ChannelMessageHandler<'c>>,
 	pub route_handler: Arc<msgs::RoutingMessageHandler>,
 }
 
@@ -103,8 +103,8 @@ impl<Descriptor: SocketDescriptor> PeerHolder<Descriptor> {
 	}
 }
 
-pub struct PeerManager<Descriptor: SocketDescriptor> {
-	message_handler: MessageHandler,
+pub struct PeerManager<'d, Descriptor: SocketDescriptor> {
+	message_handler: MessageHandler<'d>,
 	peers: Mutex<PeerHolder<Descriptor>>,
 	pending_events: Mutex<Vec<Event>>,
 	our_node_secret: SecretKey,
@@ -137,7 +137,7 @@ const INITIAL_SYNCS_TO_SEND: usize = 5;
 
 /// Manages and reacts to connection events. You probably want to use file descriptors as PeerIds.
 /// PeerIds may repeat, but only after disconnect_event() has been called.
-impl<Descriptor: SocketDescriptor> PeerManager<Descriptor> {
+impl<'d, Descriptor: SocketDescriptor> PeerManager<'d, Descriptor>{
 	pub fn new(message_handler: MessageHandler, our_node_secret: SecretKey, logger: Arc<Logger>) -> PeerManager<Descriptor> {
 		PeerManager {
 			message_handler: message_handler,
@@ -928,7 +928,7 @@ impl<Descriptor: SocketDescriptor> PeerManager<Descriptor> {
 	}
 }
 
-impl<Descriptor: SocketDescriptor> EventsProvider for PeerManager<Descriptor> {
+impl<'d, Descriptor: SocketDescriptor> EventsProvider for PeerManager<'d, Descriptor> {
 	fn get_and_clear_pending_events(&self) -> Vec<Event> {
 		let mut pending_events = self.pending_events.lock().unwrap();
 		let mut ret = Vec::new();

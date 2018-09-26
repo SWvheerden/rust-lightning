@@ -2081,9 +2081,9 @@ macro_rules! handle_error {
 	}
 }
 
-impl<'b> ChannelMessageHandler for ChannelManager<'b> {
+impl<'c, 'b:'c> ChannelMessageHandler <'c> for ChannelManager<'b> {
 	//TODO: Handle errors and close channel (or so)
-	fn handle_open_channel(&'b self, their_node_id: &PublicKey, msg: &msgs::OpenChannel) -> Result<msgs::AcceptChannel, HandleError> {
+	fn handle_open_channel(&'c self, their_node_id: &PublicKey, msg: &msgs::OpenChannel) -> Result<msgs::AcceptChannel, HandleError> {
 		handle_error!(self, self.internal_open_channel(their_node_id, msg), their_node_id)
 	}
 
@@ -2141,10 +2141,6 @@ impl<'b> ChannelMessageHandler for ChannelManager<'b> {
 
 	fn handle_announcement_signatures(&self, their_node_id: &PublicKey, msg: &msgs::AnnouncementSignatures) -> Result<(), HandleError> {
 		handle_error!(self, self.internal_announcement_signatures(their_node_id, msg), their_node_id)
-	}
-
-	fn handle_channel_reestablish(&self, their_node_id: &PublicKey, msg: &msgs::ChannelReestablish) -> Result<(Option<msgs::FundingLocked>, Option<msgs::RevokeAndACK>, Option<msgs::CommitmentUpdate>), HandleError> {
-		handle_error!(self, self.internal_channel_reestablish(their_node_id, msg), their_node_id)
 	}
 
 	fn peer_disconnected(&self, their_node_id: &PublicKey, no_connection_possible: bool) {
@@ -2227,6 +2223,10 @@ impl<'b> ChannelMessageHandler for ChannelManager<'b> {
 		});
 		//TODO: Also re-broadcast announcement_signatures
 		res
+	}
+
+	fn handle_channel_reestablish(&self, their_node_id: &PublicKey, msg: &msgs::ChannelReestablish) -> Result<(Option<msgs::FundingLocked>, Option<msgs::RevokeAndACK>, Option<msgs::CommitmentUpdate>), HandleError> {
+		handle_error!(self, self.internal_channel_reestablish(their_node_id, msg), their_node_id)
 	}
 
 	fn handle_error(&self, their_node_id: &PublicKey, msg: &msgs::ErrorMessage) {
